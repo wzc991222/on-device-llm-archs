@@ -1,0 +1,145 @@
+block_size: 8
+latent_size: 16
+decoder_output_size: 16
+latent_vocab_size: 12800
+vocab_size: 50304
+
+encoder_layer_num: 2
+aux_decoder_layer_num: 2
+main_layer_num: 12
+decoder_layer_num: 2
+parallel_layer_num: 2
+ar_decoder_layer_num: 2
+
+main_dim: 512
+attn_head_dim: 64
+attn_head_dim_w: 48
+attn_head_dim_h: 16
+attn_head_num: 8
+latent_head_dim: 64
+latent_p_head_dim: 32
+latent_c_dim: 64
+ffn_hidden_dim: 1280
+eot_idx: 50256
+pad_idx: 50257
+
+seq_len: 2048
+init_std: 0.02
+max_lr: 3.0e-4
+ae_loss_factor: 0.5
+latent_loss_factor: 0.5
+aux_loss_factor: 0.05
+theta: 10000.0
+theta_w: 1000.0
+theta_h: 100.0
+theta_s: 500.0
+weight_decay: 0.1
+adam_betas: [0.9, 0.95]
+grad_clip: 1.0
+norm_eps: 1.0e-6
+adam_eps: 1.0e-8
+dtype: "bfloat16"
+tied_vocab_emb: true
+qk_norm: false
+flex_attn_spec_kernel: true
+zero_optimizer: false
+kernel_options:
+  BLOCK_M: 64
+  BLOCK_N: 64
+  BLOCK_M1: 32
+  BLOCK_N1: 64
+  BLOCK_M2: 64
+  BLOCK_N2: 32
+
+encoder_only_original_token: true
+encoder_include_original_token: false
+encoder_global_attn: false
+encoder_token_pos_emb: true
+encoder_b: true
+encoder_positional_w: true
+encoder_rotary_emb: true
+encoder_rotary_emb_type: "1d"
+encoder_latent_spec_attn: false
+
+aux_decoder_include_original_token: false
+aux_decoder_global_attn: false
+aux_decoder_token_pos_emb: true
+aux_decoder_b: true
+aux_decoder_positional_w: true
+aux_decoder_rotary_emb: true
+
+main_token_pos_emb: true
+main_b: true
+main_rotary_emb: true
+main_rotary_emb_type: "1d"
+main_latent_spec_attn: false
+
+decoder_only_original_token: true
+decoder_include_original_token: false
+decoder_global_attn: false
+decoder_token_pos_emb: true
+decoder_b: true
+decoder_positional_w: true
+decoder_rotary_emb: true
+
+parallel_token_pos_emb: true
+parallel_rotary_emb: true
+ar_token_pos_emb: true
+ar_b: true
+ar_rotary_emb: true
+latent_loss: true
+latent_l2_loss: false
+free_latent_token_num: 0
+aux_grad_detach: false
+
+parallel_init: false
+parallel_mode: false
+pre_parallel_num: 2
+post_parallel_num: 4
+parallel_attn_block_num: 1
+decoder_output_norm: true
+decoder_output_linear: true
+iteration_init: false
+iteration_mode: true
+ar_iteration_num: 2
+ar_attn_block_num: 1
+
+lm_head_c_init: false
+lm_head_c_mode: false
+lm_head_c_num: 16
+lm_head_vec_num: 8
+y_vec_loss_factor: 0.05
+vec_label_loss_factor: 0.01
+lm_head_aux_loss_factor: 0.1
+model_grad_detach: false
+vec_topk_num: 4
+y_label_vec_loss: true
+
+train_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_train_*.bin"
+val_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_val_*.bin"
+batch_size: 3
+accumulated_steps: 8
+num_steps: 10000
+warmup_steps: 200
+cooldown_steps: 1000
+val_every: 50
+val_steps: 20
+lr_scheduler: "wsd"  # "wsd", "cos"
+min_lr_ratio: 0.01
+save: false
+beginning_save_step: 10
+save_every: 1000
+save_before_cooldown: true
+keep_latest_k: 3
+overfit: false
+mixed_precision: true
+scaler: true
+model_compile: false
+wandb_mode: "disabled"  # "online", "offline", "disabled"
+load_from_checkpoint: false
+exclude_optimizer: false
+profiler: false
+profiler_step: 5
+memory_profiler: false
+memory_profiler_start_step: 6
+memory_profiler_end_step: 8

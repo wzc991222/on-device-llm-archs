@@ -1,0 +1,85 @@
+block_size: 8
+latent_size: 12
+decoder_output_size: 24
+latent_vocab_size: 12800
+
+encoder_layer_num: 3
+main_layer_num: 15
+decoder_layer_num: 4
+ar_decoder_layer_num: 3
+
+main_dim: 512
+seq_len: 4096
+vocab_size: 50304
+attn_head_dim: 64
+attn_head_num: 8
+latent_head_dim: 64
+decoder_head_dim: 64
+ffn_hidden_dim: 1280
+eot_idx: 50256
+pad_idx: 50257
+
+init_std: 0.02
+max_lr: 3.0e-4
+latent_loss_factor: 0.5
+aux_loss_factor: 0.05
+theta: 10000.0
+weight_decay: 0.1
+adam_betas: [0.9, 0.95]
+grad_clip: 1.0
+norm_eps: 1.0e-6
+adam_eps: 1.0e-8
+dtype: "bfloat16"
+kernel_options:
+  BLOCK_M: 64
+  BLOCK_N: 64
+  BLOCK_M1: 32
+  BLOCK_N1: 64
+  BLOCK_M2: 64
+  BLOCK_N2: 32
+
+tied_vocab_emb: true
+qk_norm: false
+flex_attn_spec_kernel: true
+zero_optimizer: false
+
+token_pos_emb: true
+encoder_only_original_token: false
+encoder_include_original_token: true
+encoder_global_attn: true
+decoder_only_original_token: false
+decoder_include_original_token: true
+decoder_global_original_attn: true
+decoder_global_attn: false
+decoder_output_linear: true
+latent_target_grad_detach: false
+include_previous_block: false
+latent_loss: true
+latent_l2_loss: false
+ar_only_in_block: false
+free_latent_token_num: 0
+
+train_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_train_*.bin"
+val_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_val_*.bin"
+batch_size: 2
+accumulated_steps: 1
+num_steps: 1000
+warmup_steps: 50
+cooldown_steps: 100
+val_every: 50
+val_steps: 20
+lr_scheduler: "wsd"  # "wsd", "cos"
+min_lr_ratio: 0.01
+save: false
+save_step: 10
+save_every: 1000
+save_before_cooldown: true
+keep_latest_k: 3
+overfit: false
+mixed_precision: true
+scaler: true
+model_compile: false
+wandb_mode: "disabled"  # "online", "offline", "disabled"
+load_from_checkpoint: false
+exclude_optimizer: false
+profiler: false

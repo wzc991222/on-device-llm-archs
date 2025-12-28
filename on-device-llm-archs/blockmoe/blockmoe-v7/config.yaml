@@ -1,0 +1,96 @@
+main_dim: 768
+main_attn_num: 12
+moe_layer_num: 8
+aux_dim: 256
+aux_attn_num: 8
+aux_token_layer_num: 6
+aux_block_layer_num: 2
+aux_token_mask_type: 1
+aux_block_mask_type: 1
+aux_predict_model: true
+aux_p_token_layer_num: 2
+aux_p_block_layer_num: 6
+aux_p_token_mask_type: 1
+aux_p_block_mask_type: 1
+routed_expert_num: 60
+expert_num_per_token: 4
+router_group_num: 1
+router_predict_loss_factor: 0.1
+main_balance_loss: true
+balance_loss_factor: 0.01
+main_balance_loss_coeff: 0.1
+p_main_balance_loss_coeff: 0.0
+balance_loss_free: false
+balance_loss_sign: false
+balance_update_rate: 0.01
+routed_scaling_factor: 1.0
+expert_dim: 512
+shared_expert: false
+shared_expert_dim: 512
+first_k_layer_dense: 2
+last_k_layer_dense: 1
+ffn_factor: 2.0
+block_size: 32
+vocab_size: 50304
+eot_idx: 50256
+indices_sum: true
+layer_wise_router: false
+group_wise_router: false
+token_keys: true
+
+seq_len: 2048
+init_std: 0.02
+max_lr: 3.0e-4
+aux_max_lr: 1.5e-4
+theta: 10000.0
+weight_decay: 0.1
+adam_betas: [0.9, 0.95]
+grad_clip: 1.0
+norm_eps: 1.0e-8
+adam_eps: 1.0e-8
+dtype: "bfloat16"
+tied_vocab_emb: true
+flex_attn_spec_kernel: true
+zero_optimizer: false
+grouped_gemm_option: "for_loop"
+grouped_gemm_func: false
+grouped_gemm_checkpoint: false
+kernel_options:
+  BLOCK_M: 64
+  BLOCK_N: 64
+  BLOCK_M1: 32
+  BLOCK_N1: 64
+  BLOCK_M2: 64
+  BLOCK_N2: 32
+
+train_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_train_*.bin"
+val_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_val_*.bin"
+batch_size: 4
+aux_batch_size: 16
+sum_steps: 16
+predict_sum_steps: 1
+aux_sum_steps: 4
+num_steps: 10000
+warmup_steps: 100
+cooldown_steps: 100
+val_every: 50
+val_steps: 32
+lr_scheduler: "wsd"
+min_lr_ratio: 0.01
+save: false
+cooldown_save: true
+overfit: false
+mixed_precision: true
+scaler: true
+model_compile: false
+wandb_mode: "disabled"
+load_from_checkpoint: false
+checkpoint_path: " "
+load_model: false
+load_data: false
+load_optimizer: false
+profiler: false
+profiler_step: 5
+memory_profiler: false
+memory_profiler_start_step: 6
+memory_profiler_end_step: 8

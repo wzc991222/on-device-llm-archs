@@ -1,0 +1,145 @@
+if not aux_mode:
+    self.last_k_stat = self.last_k_stat.roll(1, 0)
+    self.last_k_stat[0] = self.stat
+self.register_buffer("last_k_stat", torch.ones(k, rn, en))
+k = config.stat_last_k
+stat_last_k: int
+
+b = self.router_batch_size if router else self.batch_size
+self.register_buffer("count", torch.zeros(1))
+self.register_buffer("step_count", torch.zeros(1, dtype=torch.long))
+print(f"rank: {rank}, step_count: {self.step_count}")
+print(f"reweight shape: {self.reweight.shape}")
+print(f"w shape: {w.shape}")
+print(f"values shape: {values.shape}, w shape: {w.shape}")
+
+w_total = torch.stack(w_list, dim=0)
+b_total = torch.stack(b_list, dim=0)
+print(f"w_total: {w_total}")
+print(f"b_total: {b_total}")
+
+step_tokens = ddp_world_size * batch_size * seq_len
+sum_step_tokens = step_tokens * sum_steps
+logger.info(f"step_tokens: {step_tokens} sum_step_tokens: {sum_step_tokens}")
+lr_scheduler: str  # "wsd", "cos"
+scheduler = config.lr_scheduler
+
+if scheduler == "wsd":
+    get_lr = get_lr_wsd
+if scheduler == "cos":
+    get_lr = get_lr_cos
+    assert cooldown_steps == 0
+
+def get_lr_cos(step: int):
+    if step < warmup_steps:
+        return (step + 1) / warmup_steps
+    elif step < num_steps:
+        decay_ratio = (step - warmup_steps) / (num_steps - warmup_steps)
+        coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+        return min_lr_ratio + coeff * (1.0 - min_lr_ratio)
+    else:
+        return min_lr_ratio
+
+def peek_update(self):
+    self.peek_pos = self.current_pos
+
+def peek_next_batch(self):
+    pass
+
+self.peek_pos = self.current_pos
+
+if (not config.peek_reweight) or peek_mode or aux_mode:
+if router_mode and not aux_mode and config.reweight:
+l = config.seq_block_num
+et = config.expert_num_per_token
+peek_reweight: bool = field(init=False)
+self.peek_reweight = (
+    True if (self.reweight and self.router_sum_steps > 1) else False
+)
+
+class AuxRouterS(nn.Module):
+    def __init__(self, config: Config):
+        super().__init__()
+
+        dim = config.aux_dim
+        attn_dim = config.aux_attn_dim
+        an = config.aux_attn_num
+        rs = config.router_size
+        aux_t_ln = config.aux_token_layer_num
+        aux_b_ln = config.aux_block_layer_num
+
+        self.token_layers = nn.ModuleList([Layer(config, dim) for _ in range(aux_t_ln)])
+        self.block_layers = nn.ModuleList([Layer(config, dim) for _ in range(aux_b_ln)])
+        self.router_token = nn.Parameter(torch.randn(1, 1, rs, dim))
+        self.attention = Attention(RotaryEmb(attn_dim, config.theta_s), an)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        token_doc: torch.Tensor,
+        block_doc: torch.Tensor,
+        config: Config,
+    ):
+        l = config.seq_block_num
+        k = config.mega_token_size
+        u = config.mega_token_per_block
+        r = config.router_block_num
+
+        x = rearrange(x, "b (lu k) d -> (b l) u k d", u=u, k=k)
+        mega_token = x.mean(2, keepdim=True)
+        x = torch.cat([x, mega_token], 2).flatten(1, 2)
+
+        def token_mask_mod(b, h, q_idx, kv_idx):
+            doc_mask = token_doc[b, q_idx] == token_doc[b, kv_idx]
+            return doc_mask
+
+        b, s = x.shape[:2]
+        token_mask = create_block_mask(token_mask_mod, b, None, s, s, _compile=True)
+        for _, layer in enumerate(self.token_layers):
+            x = layer(x, token_mask, self.attention, config)
+
+        x = rearrange(x, "(b l) (u k1) d -> b l u k1 d", l=l, u=u)
+        x = x[:, :, :, -1]
+        b, l = x.shape[:2]
+        x_list_r = [x]
+        for _ in range(r - 1):
+            x_new = x_list_r[-1].roll(1, 1)
+            x_list_r.append(x_new)
+        x_list = []
+        for i in range(r):
+            x_list.append(x_list_r[r - i - 1])
+        router_token = self.router_token.expand(b, l, -1, -1)
+        x_list.append(router_token)
+        x = torch.cat(x_list, 2).flatten(0, 1)
+
+        def block_mask_mod(b, h, q_idx, kv_idx):
+            doc_mask = block_doc[b, q_idx] == block_doc[b, kv_idx]
+            return doc_mask
+
+        b, s = x.shape[:2]
+        block_mask = create_block_mask(block_mask_mod, b, None, s, s, _compile=True)
+        for _, layer in enumerate(self.block_layers):
+            x = layer(x, block_mask, self.attention, config)
+        x = x[:, r * u :]
+        return x
+
+
+def mask_mod_2(b, h, q_idx, kv_idx):
+    q_b_idx = q_idx // m
+    kv_b_idx = kv_idx // m
+    q_r_idx = q_idx % m
+    kv_r_idx = kv_idx % m
+    causal_mask = q_b_idx > kv_b_idx
+    kv_token = kv_r_idx < n
+    router_mask = q_r_idx == kv_r_idx
+    block_mask = q_b_idx == kv_b_idx
+    doc_mask = doc[b, q_idx] == doc[b, kv_idx]
+    return (causal_mask & (kv_token | router_mask) | block_mask) & doc_mask
+
+
+if config.special_aux_router:
+    token_doc, block_doc = doc_list
+    x = self.aux_router(x, token_doc, block_doc, config)
+else:
+    doc, = doc_list
+    x = self.aux_router(x, doc, config)

@@ -1,0 +1,93 @@
+main_dim: 512
+main_attn_num: 8
+moe_layer_num: 8
+aux_dim: 256
+aux_router_dim: 256
+aux_gate_dim: 256
+aux_attn_num: 8
+aux_encoder_layer_num: 6
+aux_router_layer_num: 6
+routed_expert_num: 64
+expert_num_per_token: 4
+aux_encoder_global_attn: false
+aux_group_wise_router: false
+sole_group_wise_router: true
+group_wise_coeff: true
+router_group_num: 1
+norm_routing: true
+router_norm_value: 0.1
+gate_func: "sigmoid_norm"
+balance_loss_coeff: 5.0
+balance_loss_factor: 0.05
+new_balance_loss: true
+balance_loss_free: false
+balance_update_rate: 0.01
+routed_scaling_factor: 4.0
+router_norm_factor: 0.01
+expert_dim: 256
+shared_expert: true
+shared_expert_dim: 256
+first_k_layer_dense: 2
+last_k_layer_dense: 2
+ffn_factor: 2.5
+block_size: 16
+vocab_size: 50304
+eot_idx: 50256
+aux_batch_size: 16
+aux_accumulated_steps: 1
+
+seq_len: 2048
+init_std: 0.02
+max_lr: 3.0e-4
+theta: 10000.0
+weight_decay: 0.1
+adam_betas: [0.9, 0.95]
+grad_clip: 1.0
+norm_eps: 1.0e-8
+adam_eps: 1.0e-8
+dtype: "bfloat16"
+tied_vocab_emb: true
+flex_attn_spec_kernel: true
+zero_optimizer: false
+grouped_gemm_option: "for_loop"
+grouped_gemm_func: false
+grouped_gemm_checkpoint: false
+kernel_options:
+  BLOCK_M: 64
+  BLOCK_N: 64
+  BLOCK_M1: 32
+  BLOCK_N1: 64
+  BLOCK_M2: 64
+  BLOCK_N2: 32
+
+train_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_train_*.bin"
+val_bin: "/root/autodl-tmp/llm.c/dev/data/fineweb10B/fineweb_val_*.bin"
+batch_size: 4
+accumulated_steps: 1
+num_steps: 3000
+warmup_steps: 50
+cooldown_steps: 100
+val_every: 50
+val_steps: 20
+lr_scheduler: "wsd"
+min_lr_ratio: 0.01
+save: false
+beginning_save_step: 10
+save_every: 1000
+save_before_cooldown: true
+keep_latest_k: 2
+overfit: false
+mixed_precision: true
+scaler: true
+model_compile: false
+wandb_mode: "disabled"
+load_from_checkpoint: false
+checkpoint_path: " "
+load_model: false
+load_data: false
+load_optimizer: false
+profiler: false
+profiler_step: 5
+memory_profiler: false
+memory_profiler_start_step: 6
+memory_profiler_end_step: 8

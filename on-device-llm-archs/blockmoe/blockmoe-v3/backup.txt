@@ -1,0 +1,315 @@
+class MoELayer(nn.Module):
+    def __init__(self, config: Config):
+        super().__init__()
+        dim = config.main_dim
+        dim_e = config.expert_dim
+        dim_s = config.shared_expert_dim
+        le = config.layer_expert_num
+        self.dim = dim
+        self.attn = nn.Linear(dim, dim * 3, bias=False)
+        self.attn_o = nn.Linear(dim, dim, bias=False)
+        self.attn_norm = nn.RMSNorm(dim, eps=config.norm_eps)
+        self.ffn_norm = nn.RMSNorm(dim, eps=config.norm_eps)
+        self.ffn_experts = nn.Parameter(torch.randn(3, le, dim, dim_e))
+        if config.token_keys:
+            self.token_keys = nn.Parameter(torch.randn(dim, le))
+        if config.expert_bias:
+            self.main_bias = nn.Parameter(torch.zeros(le))
+        if config.shared_expert:
+            self.ffn_up = nn.Linear(dim, dim_s * 2, bias=False)
+            self.ffn_down = nn.Linear(dim_s, dim, bias=False)
+
+    def forward(
+        self,
+        x_input: torch.Tensor,
+        indices: torch.LongTensor,
+        values: torch.Tensor,
+        block_mask: BlockMask,
+        attention: Attention,
+        config: Config,
+    ):
+        x = self.attn_norm(x_input)
+        xq, xk, xv = torch.split(self.attn(x), self.dim, -1)
+        x_attn = attention(xq, xk, xv, block_mask, config)
+        x_attn_o = self.attn_o(x_attn)
+        x_ffn_input = x_attn_o + x_input
+        x_ffn = self.ffn_norm(x_ffn_input)
+
+        if config.token_keys:
+            token_values = (x_ffn @ self.token_keys).flatten(0, 1)
+            token_values = torch.gather(token_values, -1, indices)
+            values = values + token_values
+        if config.expert_bias:
+            values = values + self.main_bias[indices]
+
+        if config.gate_func == "softmax":
+            scores = values.softmax(-1)
+        if config.gate_func == "sigmoid":
+            scores = values.sigmoid()
+        if config.gate_func == "sigmoid_norm":
+            scores = values.sigmoid()
+            scores = scores / scores.sum(-1, keepdim=True)
+        indices = indices.flatten()
+        scores = scores.flatten().unsqueeze(-1) * config.routed_scaling_factor
+        y = grouped_gemm_func(x_ffn, self.ffn_experts, indices, scores, config)
+
+        if config.shared_expert:
+            x1, x2 = torch.split(self.ffn_up(x_ffn), config.shared_expert_dim, -1)
+            x3 = F.silu(x1) * x2
+            y_shared = self.ffn_down(x3)
+            y = y + y_shared
+
+        y = y + x_ffn_input
+        return y
+
+
+with torch.no_grad():
+    x, y = train_loader.next_batch()
+    x, y = x.to(device), y.to(device)
+    with amp_ctx:
+        loss, step_main_loss, step_balance_loss = model(x, y, config, True)
+    if ln > 0:
+        for layer in raw_model.moe_layers:
+            layer.reset()
+
+if layer_i == 1 and print_info:
+    print(f"router_logits max: {router_logits.amax(-1).mean()}")
+    print(f"router_logits mean: {router_logits.mean()}")
+    print(f"indices_bin: {indices_bin}")
+    print(f"indices_bin max: {indices_bin.amax()}")
+
+def get_m_stat(self, config: Config):
+    mf = config.m_stat_smooth_factor
+    m_stat = (self.stat + mf) / (1 + mf)
+    return m_stat 
+
+if config.balance_loss_free:
+    self.register_buffer("bias", torch.zeros(ln, 1, en))
+    self.register_buffer("stat", torch.ones(ln * en))
+
+indices_b = rearrange(indices_b, "(ln en) -> ln en", ln=ln)
+print(f"indices_b: {indices_b[0]}")
+print(f"error: {error[0, 0]}")
+print((indices_b / indices.shape[1]).amax(1).mean())
+
+
+router_logits_m = router_logits
+if config.balance_loss_free:
+    router_logits_m = router_logits + self.bias
+
+if config.balance_loss_free:
+    indices_bn = indices_b / indices.shape[1] * en
+    self.stat = self.stat * df + indices_bn * (1 - df)
+    error = rearrange(self.stat - 1, "(ln en) -> ln 1 en", ln=ln)
+    with torch.no_grad():
+        self.bias -= error * config.balance_update_rate
+
+if config.aux_expert_wise_router:
+    indices = router_logits.max(-1, keepdim=True)[1]
+else:
+    indices = router_logits.topk(et, -1, sorted=False)[1]
+
+router_values = torch.gather(router_logits, -1, indices).flatten(1)
+ln_offset = torch.arange(ln, device=device).unsqueeze(-1) * en
+indices_aux = indices + ln_offset
+
+balance_loss = 0
+indices_m = indices + torch.arange(ln, device=indices.device).unsqueeze(-1) * en
+indices_m = indices_m.flatten()
+router_values_s = torch.sigmoid(router_values).flatten()
+indices_b = torch.bincount(indices_m, minlength=ln * en)
+values_b = w_bincount(indices_m, router_values_s, ln * en)
+balance_loss = (
+    torch.dot(values_b, indices_b.type_as(values_b))
+    / (values_b.sum() * indices.shape[1])
+    * en
+    * config.balance_loss_factor
+)
+
+if config.norm_routing:
+    values = router_values * self.router_coeff + gate_values * self.gate_coeff
+else:
+    values = router_values + gate_values
+
+if config.norm_routing:
+    self.router_coeff = nn.Parameter(torch.ones(ln * gn, (dr - 1) * dc + 1), 1)
+    self.gate_coeff = nn.Parameter(torch.ones(ln * gn, (dg - 1) * dc + 1), 1)
+
+no_wd_params = [
+    param
+    for name, param in self.named_parameters()
+    if "norm" in name or "vocab_emb" in name or "lm_head" in name
+]
+wd_params = [
+    param
+    for name, param in self.named_parameters()
+    if "norm" not in name and "vocab_emb" not in name and "lm_head" not in name
+]
+param_groups = [
+    {"params": wd_params, "lr": lr, "weight_decay": wd},
+    {"params": no_wd_params, "lr": lr, "weight_decay": 0},
+]
+
+import torch
+from torch.autograd import Function
+
+class RMSNormFunction(Function):
+    @staticmethod
+    def forward(ctx, y_o, index):
+        y_sq = y_o.pow(2)
+        y_sq_mean = y_sq.mean(dim=-1, keepdim=True)
+        rms = torch.sqrt(y_sq_mean + 1e-6)
+        y = y_o / rms
+        ctx.save_for_backward(y_o, index)
+        return y
+
+    @staticmethod
+    def backward(ctx, grad_y_o):
+        y_o, index = ctx.saved_tensors
+        y_s = y_o[index]
+        y_s_sq = y_s.pow(2)
+        y_s_sq_mean = y_s_sq.mean(dim=-1, keepdim=True)
+        rms_s = torch.sqrt(y_s_sq_mean + 1e-6)
+        y_s_rms_s = y_s / rms_s
+        grad_y_s_o = grad_y_o[index]
+        grad_y_s = grad_y_s_o / rms_s - (grad_y_s_o * y_s_rms_s).sum(
+            dim=-1, keepdim=True
+        ) * y_s_rms_s / (grad_y_s_o.shape[-1] * rms_s)
+        grad_y = torch.empty_like(grad_y_s)
+        grad_y[index] = grad_y_s
+        return grad_y, None
+
+rmsnorm = RMSNormFunction.apply
+
+input = torch.randn(60, 5, dtype=torch.double, requires_grad=True)
+index = torch.randperm(60)
+gradcheck(rmsnorm, (input, index), eps=1e-6, atol=1e-6)
+
+y = torch.empty_like(y_s)
+y[index_s] = y_s
+y_rms = y / rms
+grad_y_o = torch.empty_like(grad_y_s)
+grad_y_o[index_s] = grad_y_s
+grad_y = grad_y_o / rms - (grad_y_o * y_rms).sum(
+    dim=-1, keepdim=True
+) * y_rms / (grad_y_o.shape[-1] * rms)
+grad_y_s = grad_y[index_s]
+
+print(
+    f"values_aux max: {values_aux.amax(-1).mean()}, mean: {values_aux.mean()}"
+)
+indices_bin_m = rearrange(indices_bin, "(ln en) -> ln en", ln=ln)
+print(f"indices_bin: {indices_bin_m[0]}")
+print(indices_bin_m.amax(1).mean())
+
+ln = config.moe_layer_num
+stat = rearrange(self.stat, "(ln en) -> ln en", ln=ln)
+print(f"stat: {stat[0]}")
+
+def update(self, config: Config):
+    en = config.routed_expert_num
+    ass = config.aux_sum_steps
+    error = self.stat * en / ass - 1
+    if config.balance_loss_sign:
+        error = torch.sign(error)
+    self.bias -= error * config.balance_update_rate
+    self.stat -= self.stat
+
+    router_logits_m = router_logits
+    if config.balance_loss_free:
+        bias = rearrange(self.bias, "(c ge) -> c 1 ge", ge=ge)
+        router_logits_m = router_logits + bias
+
+    if config.balance_loss_free:
+        if ddp:
+            dist.all_reduce(raw_model.aux_model.stat, op=dist.ReduceOp.AVG)
+        raw_model.aux_model.update(config)
+
+    if config.balance_loss_free:
+        self.register_buffer("bias", torch.zeros(ln * en))
+
+
+class AuxEncoder(nn.Module):
+    def __init__(self, config: Config, layer_num: int):
+        super().__init__()
+
+        dim = config.aux_dim
+        attn_dim = config.aux_attn_dim
+        an = config.aux_attn_num
+        self.layers = nn.ModuleList([Layer(config, dim) for _ in range(layer_num)])
+        self.attention = Attention(RotaryEmb(attn_dim, config.theta), an)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        doc: torch.Tensor,
+        config: Config,
+    ):
+        n = config.block_size
+
+        def mask_mod(b, h, q_idx, kv_idx):
+            q_b_idx = q_idx // n
+            kv_b_idx = kv_idx // n
+            causal_mask = q_b_idx >= kv_b_idx
+            doc_mask = doc[b, q_idx] == doc[b, kv_idx]
+            return causal_mask & doc_mask
+
+        b, s = x.shape[:2]
+        block_mask = create_block_mask(mask_mod, b, None, s, s, _compile=True)
+        for _, layer in enumerate(self.layers):
+            x = layer(x, block_mask, self.attention, config)
+        return x
+
+
+class AuxRouter(nn.Module):
+    def __init__(self, config: Config, layer_num: int):
+        super().__init__()
+
+        dim = config.aux_dim
+        attn_dim = config.aux_attn_dim
+        an = config.aux_attn_num
+        rs = config.router_size
+        self.router_token = nn.Parameter(torch.randn(1, rs, dim))
+        self.layers = nn.ModuleList([Layer(config, dim) for _ in range(layer_num)])
+        self.attention = Attention(RotaryEmb(attn_dim, config.theta), an)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        config: Config,
+    ):
+        n = config.block_size
+        rr = config.router_repeated_num
+        l = config.seq_block_num
+
+        x = rearrange(x, "b (l n) d -> (b l) n d", n=n)
+        router_token = self.router_token.expand(x.shape[0], -1, -1)
+        x = torch.cat([x, router_token], 1)
+
+        def mask_mod(b, h, q_idx, kv_idx):
+            return q_idx >= 0
+
+        b, s = x.shape[:2]
+        block_mask = create_block_mask(mask_mod, b, None, s, s, _compile=True)
+        for _, layer in enumerate(self.layers):
+            x = layer(x, block_mask, self.attention, config)
+        x = x[:, n:]
+
+        x = repeat(x, "(b l) rs d -> (rs rr) b l d", l=l, rr=rr)
+        x = x.roll(1, 2).flatten(1, 2)
+
+        return x
+
+if (s_cond or l_cond) and master_process:
+    save_path = f"{dir}/checkpoint_step_{step}_aux.pth"
+    torch.save(raw_model.aux_model.state_dict(), save_path)
+    logger.log(logging.INFO, f"aux checkpoint at step {step} saved")
+
+saved_aux_checkpoints = sorted(
+    glob.glob(os.path.join(dir, "*aux.pth")), key=os.path.getmtime, reverse=True
+)
+for old_checkpoint in saved_aux_checkpoints[config.keep_latest_k :]:
+    os.remove(old_checkpoint)
+    print(f"deleted old checkpoint: {old_checkpoint}")
+torch.cuda.synchronize()
+last_time = time.time()
